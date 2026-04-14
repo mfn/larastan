@@ -45,6 +45,20 @@ class ModelPropertyHelper
      */
     public function hasDatabaseProperty(ClassReflection|string $classReflectionOrTable, string $propertyName): bool
     {
+        return $this->checkDatabaseProperty($classReflectionOrTable, $propertyName, checkPropertyTags: true);
+    }
+
+    /**
+     * Determine if a column exists in the database schema for the model,
+     * regardless of whether the model has a @property PHPDoc tag for it.
+     */
+    public function isDatabaseColumn(ClassReflection|string $classReflectionOrTable, string $propertyName): bool
+    {
+        return $this->checkDatabaseProperty($classReflectionOrTable, $propertyName, checkPropertyTags: false);
+    }
+
+    private function checkDatabaseProperty(ClassReflection|string $classReflectionOrTable, string $propertyName, bool $checkPropertyTags): bool
+    {
         if (! $this->migrationsLoaded()) {
             $this->loadMigrations();
         }
@@ -65,7 +79,7 @@ class ModelPropertyHelper
             return false;
         }
 
-        if (ReflectionHelper::hasPropertyTag($classReflectionOrTable, $propertyName)) {
+        if ($checkPropertyTags && ReflectionHelper::hasPropertyTag($classReflectionOrTable, $propertyName)) {
             return false;
         }
 

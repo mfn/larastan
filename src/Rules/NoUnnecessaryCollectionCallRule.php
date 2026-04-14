@@ -11,12 +11,14 @@ use Illuminate\Database\Query\Builder as QueryBuilder;
 use Illuminate\Support\Collection;
 use Illuminate\Support\Str;
 use Larastan\Larastan\Properties\ModelPropertyExtension;
+use Larastan\Larastan\Properties\ModelPropertyHelper;
 use PhpParser\Node;
 use PhpParser\Node\Arg;
 use PhpParser\Node\Expr\MethodCall;
 use PhpParser\Node\Identifier;
 use PhpParser\Node\Scalar\String_;
 use PHPStan\Analyser\Scope;
+use PHPStan\Reflection\ClassReflection;
 use PHPStan\Reflection\ReflectionProvider;
 use PHPStan\Rules\Rule;
 use PHPStan\Rules\RuleError;
@@ -96,6 +98,7 @@ class NoUnnecessaryCollectionCallRule implements Rule
     public function __construct(
         protected ReflectionProvider $reflectionProvider,
         protected ModelPropertyExtension $propertyExtension,
+        protected ModelPropertyHelper $modelPropertyHelper,
         array $onlyMethods,
         array $excludeMethods,
     ) {
@@ -220,7 +223,7 @@ class NoUnnecessaryCollectionCallRule implements Rule
             /** @var String_ $firstArg */
             $firstArg = $args[0]->value;
 
-            return $this->propertyExtension->hasProperty($modelReflection, $firstArg->value);
+            return $this->isDatabaseColumnWithoutAccessor($modelReflection, $firstArg->value);
         }
 
         $iterableType = $scope->getType($node->var)->getIterableValueType();
@@ -251,7 +254,7 @@ class NoUnnecessaryCollectionCallRule implements Rule
             /** @var String_ $firstArg */
             $firstArg = $args[0]->value;
 
-            return $this->propertyExtension->hasProperty($modelReflection, $firstArg->value);
+            return $this->isDatabaseColumnWithoutAccessor($modelReflection, $firstArg->value);
         }
 
         return false;
@@ -318,6 +321,19 @@ class NoUnnecessaryCollectionCallRule implements Rule
         $calledOnType = $scope->getType($expr);
 
         return (new ObjectType(Collection::class))->isSuperTypeOf($calledOnType)->yes();
+    }
+
+    /**
+     * Returns whether the property is a real database column and not an accessor.
+     * Unlike ModelPropertyExtension::hasProperty(), this is not affected by @property PHPDoc tags.
+     */
+    protected function isDatabaseColumnWithoutAccessor(ClassReflection $modelReflection, string $propertyName): bool
+    {
+        if ($this->modelPropertyHelper->hasAccessor($modelReflection, $propertyName, strictGenerics: false)) {
+            return false;
+        }
+
+        return $this->modelPropertyHelper->isDatabaseColumn($modelReflection, $propertyName);
     }
 
     /**
